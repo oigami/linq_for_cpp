@@ -45,19 +45,19 @@ namespace linq {
                                 MakeOperatorUnit(name, Multiplier, *);
 
 
-#define MakeComputingUnit(name, op, ...)\
-    template<class T, class T2> struct name : BaseArgs {\
+#define MakeComputingUnit(FUNC_NAME, op, ...)\
+    template<class T, class T2> struct FUNC_NAME : BaseArgs {\
       private:\
       T param_; /* 第一引数 */ \
       T2 param2_; /* 第二引数 */\
       public:\
-      name(const T& param, const T2 &param2) : param_(param), param2_(param2) {}\
-      name(T&& param, T2 &&param2) : param_(std::move(param)), param2_(std::move(param2)) {}\
+      FUNC_NAME(const T& param, const T2 &param2) : param_(param), param2_(param2) {}\
+      FUNC_NAME(T&& param, T2 &&param2) : param_(std::move(param)), param2_(std::move(param2)) {}\
       template<class T3> /* 演算時のオペレータ */ \
       auto operator()(const T3& t)\
        -> decltype(param_(t) op param2_(t)) { return (param_(t) op param2_(t)); }\
-      MakeOperatorUnits(name); \
-      void operator=(const name&) = delete; \
+      MakeOperatorUnits(FUNC_NAME); \
+      void operator=(const FUNC_NAME&) = delete; \
     };
     MakeMacro(MakeComputingUnit);
 
