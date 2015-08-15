@@ -1,4 +1,6 @@
 #include"linq_for_cpp.h"
+#include<array>
+#include<iostream>
 
 int main() {
   using namespace std;
@@ -7,8 +9,12 @@ int main() {
     t[i] = i;
   }
   using linq::holder::_1;
-  auto foo = linq::From(t).Where(_1 % 2 == 0).Select(_1 * 2).ToVector();
-  for (auto& i : foo) {
+  auto foo = linq::From(t).Select([](int i) {return i * 2; });
+  auto it = *foo.begin();
+  ++it;
+  std::istreambuf_iterator<char> a;
+  const int size = sizeof(foo);
+  for (auto i : foo) {
     cout << i << endl;
   }
   /*

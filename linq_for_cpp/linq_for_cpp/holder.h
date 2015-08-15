@@ -11,7 +11,7 @@ namespace linq {
 
     template<class T> struct Data : BaseArgs {
       Data(const T &t) : data_(t) {}
-      template<class Tmp> const T& operator()(const Tmp&) { return data_; }
+      template<class Tmp> const T& operator()(const Tmp&) const { return data_; }
     private:
       Data operator=(const Data&) = delete;
       const T &data_;
@@ -25,15 +25,17 @@ namespace linq {
                                    MACRO_NAME(Multiplier, *  , __VA_ARGS__);
 
 #define MakeBeforeOperatorUnit(NAME, op, ...) template <class T, class T2> struct NAME; /* プロトタイプ宣言 */ 
+
+
     MakeMacro(MakeBeforeOperatorUnit);
 #undef MakeBeforeOperatorUnit
 #define MakeOperatorUnit(name, RETURN_NAME, OP) \
       template<class Value,class = typename std::enable_if<BaseArgs::is_base<Value>::value>::type> /* ValueがBaseArgsを継承してる場合のオペレータ */ \
-        RETURN_NAME<name<T,T2>, Value> operator OP(const Value &t) {\
+        RETURN_NAME<name<T,T2>, Value> operator OP(const Value &t) const{\
           return RETURN_NAME<name<T,T2>, Value>(std::move(*this), std::move(t)); \
       } \
       template<class Value,class = typename std::enable_if<!BaseArgs::is_base<Value>::value>::type> /* ValueがBaseArgsを継承してない場合のオペレータ */ \
-      RETURN_NAME<name<T,T2>, Data<Value>> operator OP(const Value &t) {\
+      RETURN_NAME<name<T,T2>, Data<Value>> operator OP(const Value &t) const{\
         return RETURN_NAME<name<T,T2>, Data<Value>>(std::move(*this), std::move(Data<Value>(t))); \
       }
 
@@ -54,7 +56,7 @@ namespace linq {
       FUNC_NAME(const T& param, const T2 &param2) : param_(param), param2_(param2) {}\
       FUNC_NAME(T&& param, T2 &&param2) : param_(std::move(param)), param2_(std::move(param2)) {}\
       template<class T3> /* 演算時のオペレータ */ \
-      auto operator()(const T3& t)\
+      auto operator()(const T3& t)const\
        -> decltype(param_(t) op param2_(t)) { return (param_(t) op param2_(t)); }\
       MakeOperatorUnits(FUNC_NAME); \
       void operator=(const FUNC_NAME&) = delete; \
@@ -62,15 +64,15 @@ namespace linq {
     MakeMacro(MakeComputingUnit);
 
     struct Args : BaseArgs {
-      template<class T> const T& operator()(const T &t) { return t; }
+      template<class T> const T& operator()(const T &t) const { return t; }
 
 #define MakeArgsOperator(name, op, ...) \
         /* Argsとの演算子の定義 TがArgsではない時 */ \
-        template<class T> name<Args, Data<T>> operator op(const T &t) {  \
+        template<class T> name<Args, Data<T>> operator op(const T &t) const{  \
           return name<Args, Data<T>>(std::move(*this), std::move(Data<T>(t)));\
         }\
         /* ArgsとArgsの演算子の定義  */ \
-        name<Args, Args> operator op(const Args &t) { \
+        name<Args, Args> operator op(const Args &t) const{ \
           return name<Args, Args>(*this, t); \
         }
       MakeMacro(MakeArgsOperator);

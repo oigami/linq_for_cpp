@@ -26,9 +26,9 @@ namespace linq {
     template<class T> class ArrayIterator :public std::iterator<std::forward_iterator_tag, T> {
     public:
       ArrayIterator(const T* it) : it_(it) {};
-      // IncrementIterator() : add_count_(counter_) {};
+      ArrayIterator() {};
     public:
-      const int &operator*() const { return *it_; }
+      const T &operator*() const { return *it_; }
       ArrayIterator &operator++() { ++it_; return *this; }
       bool operator!=(const ArrayIterator &x) const { return it_ != x.it_; }
       bool operator==(const ArrayIterator &x) const { return it_ == x.it_; }
@@ -44,23 +44,67 @@ namespace linq {
       using value_type = T;
       using const_iterator = ArrayIterator<T>;
       using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-      ArrayContainer(const T(&t)[size_]) :begin_(std::begin(t)), end_(std::end(t)) {}
+      ArrayContainer(const T(&t)[size_]) {
+        std::copy(std::begin(t), std::end(t), t_);
+      }
       size_t size() const { return size_; }
-      const_iterator begin() const { return begin_; }
-      const_iterator end() const { return end_; }
+      const_iterator begin() const { return std::begin(t_); }
+      const_iterator end() const { return std::end(t_); }
 
-      const_reverse_iterator rbegin() const { return const_reverse_iterator(end_); }
-      const_reverse_iterator rend() const { return const_reverse_iterator(begin_); }
+      const_reverse_iterator rbegin() const { return std::rbegin(t_); }
+      const_reverse_iterator rend() const { return std::rend(t_); }
     private:
-      const_iterator begin_;
-      const_iterator end_;
+      T t_[size_];
     };
 
-    template<class T> class ReverseIterator {
+    template<class T, size_t size_> class ArrayRefContainer {
+    public:
+      using value_type = T;
+      using const_iterator = ArrayIterator<T>;
+      using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+      ArrayRefContainer(const T(&t)[size_]) :t_(t) {}
+      size_t size() const { return size_; }
+      const_iterator begin() const { return std::begin(t_); }
+      const_iterator end() const { return std::end(t_); }
+
+      const_reverse_iterator rbegin() const { return std::rbegin(t_); }
+      const_reverse_iterator rend() const { return std::rend(t_); }
+    private:
+      const T(&t_)[size_];
+    };
+
+    template<class T> class RefContainer {
+      using value_type = typename T::value_type;
+      using const_iterator = typename T::const_iterator;
+      using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+      RefContainer(const T& t) :t_(t) {}
+      size_t size() const { return t_.size(); }
+      const_iterator begin() const { return t_.begin(); }
+      const_iterator end() const { return t_.end(); }
+
+      const_reverse_iterator rbegin() const { return const_reverse_iterator(t_.end()); }
+      const_reverse_iterator rend() const { return const_reverse_iterator(t_.begin()); }
+    private:
+      T &t_;
+    };
+
+    template<class T> class ReverseContainer {
     public:
       using const_iterator = typename T::const_reverse_iterator;
       using value_type = typename T::value_type;
-      ReverseIterator(const T&t) :t_(t) {}
+      ReverseContainer(const T &t) :t_(t) {}
+      size_t size() const { return t_.size(); }
+      const_iterator begin() const { return t_.rbegin(); }
+      const_iterator end() const { return t_.rend(); }
+    private:
+      const T t_;
+    };
+
+    template<class T> class ReverseRefContainer {
+    public:
+      using const_iterator = typename T::const_reverse_iterator;
+      using value_type = typename T::value_type;
+      ReverseRefContainer(const T &t) :t_(t) {}
       size_t size() const { return t_.size(); }
       const_iterator begin() const { return t_.rbegin(); }
       const_iterator end() const { return t_.rend(); }
@@ -68,64 +112,53 @@ namespace linq {
       const T &t_;
     };
 
-    template<class TIterator> class IEnumerableIterator {
+    template<class TContainer> class IEnumerableIterator {
     public:
-      using IteratorType = TIterator;
-      IEnumerableIterator(const TIterator &b, const TIterator &e) :begin_(b), end_(e), it_(b) {}
-      bool reset() {
-        it_ = begin_;
-        return it_ != end_;
-      }
-      bool next() {
-        assert(it_ != end_);
-        if (++it_ == end_) return false;
-        return true;
-      }
-      const typename TIterator::value_type &front() const { return *it_; }
-
-      IteratorType begin() const { return begin_; }
-      IteratorType end() const { return end_; }
+      using IteratorType = typename TContainer::const_iterator;
+      IEnumerableIterator(const TContainer &container) :container_(container) {}
+     
+      IteratorType begin() const { return container_.begin(); }
+      IteratorType end() const { return container_.end(); }
     private:
-      IteratorType begin_;
-      IteratorType end_;
-      IteratorType it_;
+      TContainer container_;
     };
 
     template<class Child, class TRange> class IEnumerableLinq;
     template<class Child, class TRange> class ToContainer;
 
-    template<class TRange, class Func> class Select :public IEnumerableLinq<Select<TRange, Func>, TRange> {
+    template<class TRange, class Func> class CSelect :public IEnumerableLinq<CSelect<TRange, Func>, TRange> {
     public:
-      friend ToContainer<Select<TRange, Func>, TRange>;
-      using MyType = Select<TRange, Func>;
+      class iterator;
+      using const_iterator = iterator;
+      using MyType = CSelect<TRange, Func>;
       using value_type = typename FuncResult<Func, typename TRange::value_type>::type;
-      Select(const TRange &range, Func func) : range_(range), func_(func) {}
-
-    protected:
-      bool reset() { return range_.reset(); }
-      bool next() { return range_.next(); }
-      value_type front() { return func_(range_.front()); }
+      class iterator {
+        using i_const_iterator = typename TRange::const_iterator;
+        Func func_;
+        i_const_iterator t_;
+      public:
+        iterator(i_const_iterator it, Func func) : func_(func), t_(it) {}
+        value_type operator*() const { return func_(*t_); }
+        iterator &operator++() { ++t_; return *this; }
+        bool operator!=(const iterator &x) const { return t_ != x.t_; }
+      };
+      CSelect(const TRange &range, Func func) : range_(range), func_(func) {}
+      iterator begin() const { return iterator(range_.begin(), func_); }
+      iterator end() const { return iterator(range_.end(), func_); }
 
     private:
-      void operator=(const Select&) = delete;
-
+      void operator=(const CSelect&) = delete;
       TRange range_;
       Func func_;
     };
 
     template<class TRange, class Func> class SelectMany :public IEnumerableLinq<SelectMany<TRange, Func>, TRange> {
     public:
-      friend ToContainer<Select<TRange, Func>, TRange>;
       using value_type = typename FuncResult<Func, typename TRange::value_type>::type;
       SelectMany(const TRange &range, Func func) : range_(range), func_(func) {}
 
-    protected:
-      bool reset() { return range_.reset(); }
-      bool next() { return range_.next(); }
-      value_type front() { return func_(range_.front()); }
-
     private:
-      void operator=(const Select<TRange, Func>&) = delete;
+      void operator=(const SelectMany<TRange, Func>&) = delete;
 
       TRange range_;
       Func func_;
@@ -134,16 +167,32 @@ namespace linq {
     template<class TRange, class Func> class Where : public IEnumerableLinq<Where<TRange, Func>, TRange> {
     public:
       using value_type = typename TRange::value_type;
-      Where(const TRange &range, Func func) : range_(range), func_(func) {}
-      bool reset() { return range_.reset(); }
-      bool next() {
-        while (range_.next()) {
-          if (func_(range_.front()))
-            return true;
+      class iterator {
+        using i_const_iterator = typename TRange::const_iterator;
+        i_const_iterator t_;
+        i_const_iterator end_;
+        Func func_;
+        bool is_end_;
+      public:
+        iterator(Func func, i_const_iterator it, i_const_iterator end) :
+          t_(it), end_(end), func_(func), is_end_(false) {
         }
-        return false;
-      }
-      value_type front() { return range_.front(); }
+        iterator(Func func, i_const_iterator end) :t_(end), end_(end), is_end_(true), func_(func) {}
+        auto operator*() const -> decltype(*t_) { return *t_; }
+        iterator &operator++() {
+          while (++t_ != end_) {
+            if (func_(*t_)) return *this;
+          }
+          is_end_ = true;
+          return *this;
+        }
+        bool operator!=(const iterator &x) const { return is_end_ != x.is_end_; }
+      };
+      using const_iterator = iterator;
+      Where(const TRange &range, Func func) : range_(range), func_(func) {}
+
+      iterator begin() { return iterator(func_, range_.begin(), range_.end()); }
+      iterator end() { return iterator(func_, range_.end()); }
     private:
       void operator=(const Where&) = delete;
 
@@ -152,17 +201,31 @@ namespace linq {
     };
 
     template<class TRange> class Skip : public IEnumerableLinq<Skip<TRange>, TRange> {
+    public:
       using value_type = typename TRange::value_type;
-      Skip(const TRange &range, size_t count) : range_(range), count_(count), is_skiped_(false) {}
-      bool reset() {
-        if (!range_.reset()) return false;
+      class iterator {
+        using i_const_iterator = typename TRange::const_iterator;
+        i_const_iterator t_;
+      public:
+        iterator(i_const_iterator it) : t_(it) {}
+        value_type operator*() const { return *t_; }
+        iterator &operator++() { ++t_; return *this; }
+        bool operator!=(const iterator &x) const { return t_ != x.t_; }
+      };
+      Skip(const TRange &range, size_t count) : range_(range), count_(count) {}
+
+      using const_iterator = iterator;
+
+      iterator begin()const {
+        auto it = range_.begin(), end = range_.end();
         size_t count = 0;
         while (count++ < count_) {
-          if (!range_.next())return false;
+          if (it != end) break;
+          ++it;
         }
+        return iterator(it);
       }
-      bool next() { return range_.next(); }
-      value_type front() { return range_.front(); }
+      iterator end() const { return iterator(range_.end()); }
     private:
       void operator=(const Skip&) = delete;
 
@@ -171,33 +234,50 @@ namespace linq {
     };
 
     template<class TRange> class Take : public IEnumerableLinq<Take<TRange>, TRange> {
+    public:
       using value_type = typename TRange::value_type;
-      Take(const TRange &range, size_t count) : range_(range), count_(count), current_(0) {}
-      bool reset() { return range_.reset(); }
-      bool next() {
-        if (current_++ < count_)return false;
-        return range_.next();
-      }
-      value_type front() { return range_.front(); }
+      class iterator {
+        using i_const_iterator = typename TRange::const_iterator;
+        i_const_iterator t_;
+        size_t current_;
+      public:
+        iterator(i_const_iterator it, size_t current) : t_(it), current_(current) {}
+        value_type operator*() const { return *t_; }
+        iterator &operator++() { ++t_; ++current_; return *this; }
+        bool operator!=(const iterator &x) const { return t_ != x.t_ && current_ != x.current_; }
+      };
+      using const_iterator = iterator;
+      Take(const TRange &range, size_t count) : range_(range), count_(count) {}
+
+      iterator begin() const { return iterator(range_.begin(), 0u); }
+      iterator end() const { return iterator(range_.end(), count_); }
     private:
       void operator=(const Take&) = delete;
 
       TRange range_;
       size_t count_;
-      size_t current_;
     };
 
     template<class TRange, class Func> class TakeWhile : public IEnumerableLinq<TakeWhile<TRange, Func>, TRange> {
+    public:
       using value_type = typename TRange::value_type;
-      TakeWhile(const TRange &range, Func func) : range_(range), count_(count) {}
-      bool reset() { return range_.reset(); }
-      bool next() {
-        if (!range_.next())return false;
-        return func_(range_.front());
-      }
-      value_type front() { return range_.front(); }
+      class iterator {
+        using i_const_iterator = typename TRange::const_iterator;
+        i_const_iterator t_;
+        Func func_;
+      public:
+        iterator(i_const_iterator it, Func func) : t_(it), func_(func) {}
+        value_type operator*() const { return *t_; }
+        iterator &operator++() { ++t_; return *this; }
+        bool operator!=(const iterator &x) const { return t_ != x.t_ && (func_(*t_)); }
+      };
+      using const_iterator = iterator;
+      TakeWhile(const TRange &range, Func func) : range_(range), func_(func) {}
+
+      iterator begin() const { return iterator(range_.begin(), func_); }
+      iterator end() const { return iterator(range_.end(), func_); }
     private:
-      void operator=(const Take<TRange>&) = delete;
+      void operator=(const TakeWhile &) = delete;
 
       TRange range_;
       Func func_;
@@ -211,54 +291,51 @@ namespace linq {
         return static_cast<Child&>(*this);
       }
 #ifndef NDEBUG
-      virtual void func() {};
+      virtual void debug_virtual_func() {};
 #endif
     };
 
     template<class Child, class TRange> class ToContainer : public ChildChecker<Child> {
     public:
+#define DECLTYPE_AUTO decltype(*GetChild().begin())
       using value_type = typename TRange::value_type;
       std::vector<value_type> ToVector() {
         std::vector<value_type> ret;
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          ret.push_back(child.front());
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          ret.push_back(i);
+        }
         return ret;
       }
 
       template<class Func> void ForEach(const Func &func) {
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          func(child.front());
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          func(i);
+        }
       }
 
       value_type Sum() {
         value_type t{};
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          t += child.front();
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          t += i;
+        }
         return t;
       }
 
       template<class T, class Func> T Aggregate(const T &t, Func func) {
         Child &child = this->GetChild();
         T working = t;
-        if (child.reset()) do {
-          working = func(working, child.front());
-        } while (child.next());
+        for (DECLTYPE_AUTO i : child) {
+          working = func(working, i);
+        }
         return working;
       }
 
       template<class Func> value_type Aggregate(Func func) {
         Child &child = this->GetChild();
-        if (!child.reset())throw std::exception("empty");
-        value_type working = child.front();
-        while (child.next()) {
-          working = func(working, child.front());
-        }
+        auto it = child.begin(), end = child.end();
+        if (!(it != end)) throw std::exception("empty");
+        value_type working = *it;
+        while (++it != end) working = func(working, *it);
         return working;
       }
 
@@ -281,54 +358,58 @@ namespace linq {
       }
 
       template<class Func> bool All(Func func) {
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          if (!func(child.front()))return false;
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          if (!func(i))return false;
+        }
         return true;
       }
 
       template<class Func> bool Any(Func func) {
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          if (func(child.front()))return true;
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          if (func(i))return true;
+        }
         return false;
       }
 
       value_type First() {
-        Child &child = this->GetChild();
-        if (!child.reset()) throw std::exception("Empty");
-        return child.front();
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          return i;
+        }
+        throw std::exception("Empty");
       }
 
       value_type FirstOrDefault(const value_type &value) {
-        Child &child = this->GetChild();
-        if (!child.reset()) return value;
-        return child.front();
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          return i;
+        }
+        return value;
       }
 
       value_type Single() {
         Child &child = this->GetChild();
-        if (!child.reset()) std::exception("empty");
-        value_type ret = child.front();
-        if (child.next()) std::exception("Multiple");
+        auto it = child.begin(), end = child.end();
+        if (it != end) {
+          value_type ret = *it;
+          if (++it != end) throw std::exception("Multiple");
+        } else {
+          throw std::exception("empty");
+        }
         return ret;
       }
 
-      value_type SingleOrDefault(const value_type &value) {
+      value_type SingleOrDefault(const value_type &value){
         Child &child = this->GetChild();
-        if (!child.reset()) return value;
-        value_type ret = child.front();
-        if (child.next()) std::exception("Multiple");
+        auto it = child.begin(), end = child.end();
+        if (!(it != end)) return value;
+        DECLTYPE_AUTO ret = *it;
+        if (++it != end) throw std::exception("Multiple");
         return ret;
       }
 
-      bool Contains(const value_type &value) {
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          if (value == child.front()) return true;
-        } while (child.next());
+        bool Contains(const value_type &value) {
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          if (value == i) return true;
+        }
         return false;
       }
 
@@ -339,10 +420,9 @@ namespace linq {
       /// <param name="comparer">ílÇî‰ärÇ∑ÇÈä÷êî</param>
       /// <returns></returns>
       template<class Func> bool Contains(const value_type &value, Func comparer) {
-        Child &child = this->GetChild();
-        if (child.reset()) do {
-          if (comparer(value, child.front())) return true;
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          if (comparer(value, i)) return true;
+        }
         return false;
       }
 
@@ -350,10 +430,9 @@ namespace linq {
       auto GroupBy(Func_Arg1 func) -> std::unordered_map<typename FuncResult<Func_Arg1, value_type>::type, std::vector<value_type>> {
         Child &child = this->GetChild();
         std::unordered_map<typename FuncResult<Func_Arg1, value_type>::type, std::vector<value_type>> ret;
-        if (child.reset()) do {
-          auto val = child.front();
-          ret[func(val)].push_back(val);
-        } while (child.next());
+        for (DECLTYPE_AUTO i : this->GetChild()) {
+          ret[func(i)].push_back(i);
+        }
         return ret;
       }
 #if 0
@@ -361,20 +440,40 @@ namespace linq {
         static_assert(0, "A function is the number of arguments are incorrect");
       }
 #endif // 0
+#undef DECLTYPE_AUTO
     };
 
+    template<class Child> class ChildIterator {
+      using value_type = typename Child::value_type;
+    public:
+
+      ChildIterator(const Child& it) : it_(it) {
+        it_.reset();
+      };
+      ChildIterator() {};
+    public:
+      const value_type &operator*() const { return *it_; }
+      ChildIterator &operator++() { ++it_; return *this; }
+      bool operator!=(const ChildIterator &x) const { return it_ != x.it_; }
+      bool operator==(const ChildIterator &x) const { return it_ == x.it_; }
+      bool operator<(const ChildIterator &x) const { return it_ < x.it_; }
+      bool operator<=(const ChildIterator &x) const { return it_ <= x.it_; }
+
+    private:
+      const Child &it_;
+    };
     template<class Child, class TRange>
     class IEnumerableLinq : public ToContainer<Child, TRange> {
     public:
       using value_type = typename TRange::value_type;
       template<class T>using Result = typename FuncResult<T, value_type>::type;
 
-      template<class Func> detail::Select<Child, Func> Select(const Func &func) {
-        return detail::Select<Child, Func>(this->GetChild(), func);
+      template<class Func> detail::CSelect<Child, Func> Select(const Func &func) {
+        return detail::CSelect<Child, Func>(this->GetChild(), func);
       }
 
-      template<class Func> detail::Select<Child, Func> SelectMany(const Func &func) {
-        return detail::Select<Child, Func>(this->GetChild(), func);
+      template<class Func> detail::SelectMany<Child, Func> SelectMany(const Func &func) {
+        return detail::SelectMany<Child, Func>(this->GetChild(), func);
       }
 
       template<class Func> detail::Where<Child, Func> Where(const Func &func) {
@@ -393,6 +492,10 @@ namespace linq {
         return detail::TakeWhile<Child, Func>(this->GetChild(), func);
       }
 
+
+      //range based for
+
+
     protected:
       void operator=(const IEnumerableLinq&) = delete;
       IEnumerableLinq() {}
@@ -401,7 +504,7 @@ namespace linq {
     class IncrementIterator : public std::iterator<std::forward_iterator_tag, int> {
     public:
       IncrementIterator(int counter, int add_count = 1) : counter_(counter), add_count_(add_count) {};
-      // IncrementIterator() : add_count_(counter_) {};
+      IncrementIterator() {};
     public:
       const int &operator*() const { return counter_; }
       IncrementIterator &operator++() { counter_ += add_count_; return *this; }
@@ -429,62 +532,68 @@ namespace linq {
       int start_, count_;
     };
 
-    }
+  }
 
-  template<class TIterator> class IEnumerable :
-    public detail::IEnumerableLinq<IEnumerable<TIterator>, TIterator>,
-    public detail::IEnumerableIterator<TIterator> {
+  template<class TContainer> class IEnumerable :
+    public detail::IEnumerableLinq<IEnumerable<TContainer>, TContainer>,
+    public detail::IEnumerableIterator<TContainer> {
   public:
-    using Iterator = detail::IEnumerableIterator<TIterator>;
+    using Iterator = detail::IEnumerableIterator<TContainer>;
     using const_iterator = typename Iterator::IteratorType;
 
-    IEnumerable(const TIterator &b, const TIterator &e, size_t size) : Iterator(b, e), size_(size) {}
-    size_t Count() const { return size_; }
+    IEnumerable(const TContainer &container) : Iterator(container) {}
+    size_t Count() const { return container.size(); }
   private:
-    size_t size_;
+
     void operator=(const IEnumerable&) = delete;
   };
 
   struct Enumerable {
-    static IEnumerable<detail::Range::const_iterator> Range(int start, int count) {
+    static IEnumerable<detail::Range> Range(int start, int count) {
       detail::Range range(start, count);
-      return IEnumerable<detail::Range::const_iterator>(range.begin(), range.end(), range.size());
+      return IEnumerable<detail::Range>(range);
     }
 
-    template<class T> static IEnumerable<T> From(const T &b, const T &e, size_t size) {
-      return IEnumerable<T>(b, e, size);
-    }
-
-    template<class T> static auto From(const T &t) -> IEnumerable<decltype(t.begin())> {
-      return From(t.begin(), t.end(), t.size());
+    template<class T> static IEnumerable<T> From(const T &t) {
+      return IEnumerable<T>(t);
     }
   };
 
-  IEnumerable<detail::Range::const_iterator> Range(int start, int count) {
+  IEnumerable<detail::Range> Range(int start, int count) {
     return Enumerable::Range(start, count);
   }
 
-  template<class T> IEnumerable<typename T::const_iterator> From(const T &t) {
-    return Enumerable::From(t.begin(), t.end(), t.size());
+  template<class T> IEnumerable<detail::RefContainer<T>> From(const T &t) {
+    detail::RefContainer<T> container(t);
+    return Enumerable::From(container);
   }
 
   template<class T, size_t size>
-  IEnumerable<typename detail::ArrayContainer<T, size>::const_iterator> From(const T(&t)[size]) {
-    detail::ArrayContainer<T, size> a(t);
-    return Enumerable::From(a.begin(), a.end(), size);
+  IEnumerable<detail::ArrayRefContainer<T, size>> From(const T(&t)[size]) {
+    detail::ArrayRefContainer<T, size> a(t);
+    return Enumerable::From(a);
   }
 
-  template<class T> IEnumerable<typename T::const_reverse_iterator> FromReverse(const T &t) {
-    return Enumerable::From(t.rbegin(), t.rend(), t.size());
+  template<class T> IEnumerable<T> FromCopy(const T &t) {
+    return Enumerable::From(t);
+  }
+
+  template<class T, size_t size> IEnumerable<detail::ArrayContainer<T, size>> FromCopy(const T(&t)[size]) {
+    return Enumerable::From(detail::ArrayContainer<T, size>(t));
+  }
+
+  template<class T> IEnumerable<detail::ReverseRefContainer<T>> FromReverse(const T &t) {
+    detail::ReverseRefContainer<T> container(t);
+    return Enumerable::From(container);
   }
 
   template<class T, size_t size>
-  IEnumerable<typename detail::ArrayContainer<T, size>::const_reverse_iterator> FromReverse(const T(&t)[size]) {
-    detail::ArrayContainer<T, size> a(t);
-    return Enumerable::From(a.rbegin(), a.rend(), size);
+  IEnumerable<detail::ReverseContainer<detail::ArrayRefContainer<T, size>>> FromReverse(const T(&t)[size]) {
+    using ArrayContainer = detail::ArrayRefContainer<T, size>;
+    detail::ReverseContainer<ArrayContainer> container(ArrayContainer{ t });
+    return Enumerable::From(container);
   }
 
-
-  }
+}
 
 #endif // !INCLUDE_RANGE_H
