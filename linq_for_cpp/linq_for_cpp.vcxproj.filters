@@ -23,7 +23,7 @@
     <ClInclude Include="linq_for_cpp.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="linq_for_cpp\holder.h">
+    <ClInclude Include="linq_for_cpp\lambda.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
   </ItemGroup>
